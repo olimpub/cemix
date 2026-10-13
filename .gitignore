@@ -1,0 +1,28 @@
+# SQL Data Dumps & Database Files
+Cemix_dev.sql
+*.mdf
+*.ldf
+*.ndf
+*.bak
+
+# Build Results & Binaries
+[Bb]in/
+[Oo]bj/
+*.dll
+*.pdb
+*.dacpac
+
+# Visual Studio & IDE files
+.vs/
+.vscode/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.dbmdl
+*.jfm
+*(DESKTOP-*'s conflicted copy*).*
+
+# Temp & Log files
+*.log
+*.tmp
