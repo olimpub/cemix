@@ -47,6 +47,11 @@ BEGIN
 		SET st.LastRunDate=@LastRunDateInDateFormat
 		FROM tblShipmentStatusExecution st WHERE st.id=@Status AND SiteCode=@SiteCode
 	END
+
+	-- First run: recompute the unix timestamp from the just persisted value.
+	-- Without this @LastRunDate stays NULL and the filter/URL becomes NULL.
+	SELECT @LastRunDate = [dbo].[spGetUnixTimestamp](DATEADD(mi,-5,st.LastRunDate))
+	FROM tblShipmentStatusExecution st WHERE st.id=@Status AND SiteCode=@SiteCode
 END
 
 --SELECT @Status AS StatusRequest, @StatusName AS StatusName, @LastRunDateInDateFormat AS StatusDate
@@ -91,8 +96,6 @@ BEGIN
 END
 
 SELECT @URL=tcpr.[url]+'api/'+tcpr.[profile id]+'/stations'+@Filter FROM [dbo].[tblClientParams] tcpr WHERE tcpr.SiteCode=@SiteCode
-
-SELECT @URL, @Filter
 
 --TOKEN
 EXECUTE spGetToken

@@ -18,6 +18,8 @@ AS
 BEGIN
 DECLARE @Msg NVARCHAR(MAX)	
 BEGIN TRY 
+	BEGIN TRANSACTION
+
 	INSERT INTO [dbo].[tblTransportArchive]
 			   ([id]
 			   ,[TransportNo]
@@ -199,6 +201,8 @@ BEGIN TRY
 
 	DELETE ci FROM tblCargoItem ci WHERE ci.[SourceStatus]=3 OR ci.DestinationStatus=3
 
+	COMMIT TRANSACTION
+
 	SET @SuccessFlg=1
 	SET @Msg='OK'
 
@@ -207,6 +211,9 @@ BEGIN TRY
 
 END TRY
 BEGIN CATCH
+	IF @@TRANCOUNT > 0
+		ROLLBACK TRANSACTION
+
 	SET @SuccessFlg=0
 	SET @Msg=ERROR_MESSAGE()
 

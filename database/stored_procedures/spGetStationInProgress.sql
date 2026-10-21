@@ -81,8 +81,6 @@ BEGIN
 
 			);
 		
-		SELECT @PickingStatus,@CurrentStatus
-
 		IF(ISNULL(@PickingStatus,'')<>'inprogress' AND ISNULL(@CurrentStatus,'')<>'loading')
 		BEGIN
 			SET @InProgressFlg=0

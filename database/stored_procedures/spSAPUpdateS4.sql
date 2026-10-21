@@ -38,13 +38,10 @@ SELECT @Token=dbo.fnBase64CLR(@UserName+':'+@Password)
 
 --Create Header
 SET @Header='Authorization: Basic '+@Token+'&'
-SELECT @Header
 --Other data
 SET @ResponseAccept='application/xml'
 SET @MsgType='application/xml'
 SET @MsgMethod='POST'
-
-SELECT @URL
 
 SET @TransferType=12
 
@@ -58,7 +55,6 @@ SELECT @TransferID=SCOPE_IDENTITY()
 --Generate Body
 SELECT @XML=[dbo].[fnSAPSHPMNT06S4](@ShipmentID)
 SELECT @Body='<?xml version="1.0" encoding="utf-8"?>'+REPLACE((CONVERT(VARCHAR(MAX),@XML,1)),' xmlns=""','')
-SELECT @Body
 
 --Update Body
 UPDATE tblTransferOut
