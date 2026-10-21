@@ -57,7 +57,7 @@ SET @ResponseAccept='application/json'
 SET @MsgType=''
 SET @MsgMethod='GET'
 
-SET @TransferID=17
+SET @TransferType=17
 
 BEGIN TRY
 --Insert Transfer

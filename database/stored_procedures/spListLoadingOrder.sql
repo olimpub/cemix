@@ -54,7 +54,7 @@ SET @ResponseAccept='application/json'
 SET @MsgType=''
 SET @MsgMethod='GET'
 
-SET @TransferID=9
+SET @TransferType=9
 
 BEGIN TRY
 --Insert Transfer
@@ -106,7 +106,8 @@ END
 END TRY
 BEGIN CATCH
 	SELECT @Msg=ERROR_MESSAGE()
-SELECT 'spListLoadingOrder','@SiteCode='+@SiteCode+',@Page='+CAST(@Page AS varchar(10)),'',@Msg,0,25,@TransferID
+	INSERT INTO tblLog(SPName,Inparams,Outparams,Msg,SuccessFlg,ProcessID,TransferOut)
+	SELECT 'spListLoadingOrder','@SiteCode='+@SiteCode+',@Page='+CAST(@Page AS varchar(10)),'',@Msg,0,25,@TransferID
 	SET @SuccessFlg=0
 END CATCH
 END

@@ -80,7 +80,8 @@ IF(@SuccessFlg=0)
 BEGIN
 	SET @Msg='WebRequest Failed'
 	INSERT INTO tblLog(SPName,Inparams,Outparams,Msg,SuccessFlg)
-	SELECT 'spListBookings','@SiteCode='+@SiteCode+',@Pag='+CAST(@Page AS varchar(10)),'',@Msg,0
+	SELECT 'spListBookings','@SiteCode='+@SiteCode+',@Page='+CAST(@Page AS varchar(10)),'',@Msg,0
+	RETURN
 END
 ELSE
 BEGIN

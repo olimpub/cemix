@@ -66,6 +66,7 @@ BEGIN
 	SET @Msg='WebRequest Failed'
 	INSERT INTO tblLog(SPName,Inparams,Outparams,Msg,SuccessFlg)
 	SELECT 'spGetStationInProgress','@SiteCode='+@SiteCode+',@StationID='+@StationID,'',@Msg,0
+	RETURN
 END
 ELSE
 BEGIN
