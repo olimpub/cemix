@@ -1,5 +1,7 @@
 # SQL Data Dumps & Database Files
 Cemix_dev.sql
+Stat/Stat_scrpt.sql
+scripts/resend_failed_cargos_sanex_*.sql
 *.mdf
 *.ldf
 *.ndf
@@ -26,3 +28,4 @@ Cemix_dev.sql
 # Temp & Log files
 *.log
 *.tmp
+.aider*

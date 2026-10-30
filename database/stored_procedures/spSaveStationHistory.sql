@@ -1,112 +1,162 @@
-/****** Object:  StoredProcedure [dbo].[spSaveStationHistory]    Script Date: 2026. 10. 13. 8:28:31 ******/
+/****** Object:  StoredProcedure [dbo].[spSaveStationHistory] ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
 
-
 CREATE PROCEDURE [dbo].[spSaveStationHistory](
-	@StationID VARCHAR(30)
+	@StationID VARCHAR(50)
 )
 AS 
 BEGIN
+	SET NOCOUNT ON;
 
-BEGIN TRY	
-	DELETE FROM tblShipmentStat WHERE StationID=@StationID
-	DELETE FROM tblShipmentLog WHERE StationID=@StationID
+	BEGIN TRY	
+		DELETE FROM tblShipmentStat WHERE StationID = @StationID;
+		DELETE FROM tblShipmentLog WHERE StationID = @StationID;
 
-	INSERT INTO tblShipmentLog(SiteCode,StationID,PickingFlg,LoadingFlg,StartID, UserID,ExcludeFlg)
-	SELECT tbh.SiteCode, tbh.StationID, 1,0,tbh.id,tbh.UserID,0  FROM tblShipmentHistory tbh
-	WHERE tbh.StationID=@StationID
-	AND tbh.StageFlg=0 AND tbh.Status='inprogress'
+		-- Insert Picking (StageFlg=0, Status='inprogress') and Loading (StageFlg=1, Status='loading') start events in one pass
+		INSERT INTO tblShipmentLog (SiteCode, StationID, PickingFlg, LoadingFlg, StartID, StartDate, UserID, ExcludeFlg)
+		SELECT
+			tbh.SiteCode,
+			tbh.StationID,
+			CASE WHEN tbh.StageFlg = 0 THEN 1 ELSE 0 END AS PickingFlg,
+			CASE WHEN tbh.StageFlg = 1 THEN 1 ELSE 0 END AS LoadingFlg,
+			tbh.id,
+			tbh.ChangeDate,
+			tbh.UserID,
+			0
+		FROM tblShipmentHistory tbh
+		WHERE tbh.StationID = @StationID
+		  AND (
+			  (tbh.StageFlg = 0 AND tbh.Status = 'inprogress')
+			  OR (tbh.StageFlg = 1 AND tbh.Status = 'loading')
+		  );
 
-	INSERT INTO tblShipmentLog(SiteCode,StationID,PickingFlg,LoadingFlg,StartID,UserID,ExcludeFlg)
-	SELECT tbh.SiteCode, tbh.StationID, 0,1,tbh.id, tbh.UserID,0  FROM tblShipmentHistory tbh
-	WHERE tbh.StationID=@StationID
-	AND tbh.StageFlg=1 AND tbh.Status='loading'
+		-- Match each start event with the next chronological event of the same StageFlg
+		UPDATE tsl
+		SET
+			tsl.EndID      = CASE
+								 WHEN tsl.PickingFlg = 1 AND nextEvt.Status = 'closed' THEN nextEvt.id
+								 WHEN tsl.LoadingFlg = 1 AND nextEvt.Status IN ('administration', 'closed') THEN nextEvt.id
+								 ELSE NULL
+							 END,
+			tsl.EndDate    = CASE
+								 WHEN tsl.PickingFlg = 1 AND nextEvt.Status = 'closed' THEN nextEvt.ChangeDate
+								 WHEN tsl.LoadingFlg = 1 AND nextEvt.Status IN ('administration', 'closed') THEN nextEvt.ChangeDate
+								 ELSE NULL
+							 END,
+			tsl.LogTime    = CASE
+								 WHEN (tsl.PickingFlg = 1 AND nextEvt.Status = 'closed')
+								   OR (tsl.LoadingFlg = 1 AND nextEvt.Status IN ('administration', 'closed'))
+								 THEN DATEDIFF(MINUTE, tsl.StartDate, nextEvt.ChangeDate)
+								 ELSE NULL
+							 END,
+			tsl.ExcludeFlg = CASE
+								 WHEN (tsl.PickingFlg = 1 AND nextEvt.Status = 'closed')
+								   OR (tsl.LoadingFlg = 1 AND nextEvt.Status IN ('administration', 'closed'))
+								 THEN 0
+								 ELSE 1
+							 END
+		FROM tblShipmentLog tsl
+		OUTER APPLY (
+			SELECT TOP 1 tbh.id, tbh.ChangeDate, tbh.Status
+			FROM tblShipmentHistory tbh
+			WHERE tbh.StationID = tsl.StationID
+			  AND tbh.id > tsl.StartID
+			  AND (
+				  (tsl.PickingFlg = 1 AND tbh.StageFlg = 0)
+				  OR (tsl.LoadingFlg = 1 AND tbh.StageFlg = 1)
+			  )
+			ORDER BY tbh.id ASC
+		) nextEvt
+		WHERE tsl.StationID = @StationID;
 
-	UPDATE tsl
-	SET tsl.EndID=(SELECT MIN(tbh.id) FROM tblShipmentHistory tbh WHERE tbh.id<=(tsl.StartID+2) AND tbh.id>tsl.StartID AND tbh.Status='closed' AND tbh.StageFlg=0 AND tbh.StationID=tsl.StationID)
-	FROM tblShipmentLog tsl
-	WHERE tsl.StationID=@StationID AND tsl.PickingFlg=1
+		-- Aggregate Stage timestamps in a single scan of tblShipmentHistory
+		DECLARE @MinWaitingDate DATETIME,
+				@MinLoadingDate DATETIME,
+				@MaxAdminDate   DATETIME,
+				@MaxClosedDate  DATETIME,
+				@PickingTime    SMALLINT,
+				@LoadingTime    SMALLINT;
 
-	UPDATE tsl
-	SET tsl.EndID=(SELECT MIN(tbh.id) FROM tblShipmentHistory tbh WHERE tbh.id=(tsl.StartID+1) AND tbh.Status='administration' AND tbh.StageFlg=1 AND tbh.StationID=tsl.StationID)
-	FROM tblShipmentLog tsl
-	WHERE tsl.StationID=@StationID AND tsl.LoadingFlg=1
+		SELECT
+			@MinWaitingDate = MIN(CASE WHEN tbh.Status = 'waiting'        THEN tbh.ChangeDate END),
+			@MinLoadingDate = MIN(CASE WHEN tbh.Status = 'loading'        THEN tbh.ChangeDate END),
+			@MaxAdminDate   = MAX(CASE WHEN tbh.Status = 'administration' THEN tbh.ChangeDate END),
+			@MaxClosedDate  = MAX(CASE WHEN tbh.Status = 'closed'         THEN tbh.ChangeDate END)
+		FROM tblShipmentHistory tbh
+		WHERE tbh.StationID = @StationID
+		  AND tbh.StageFlg = 1;
 
-	UPDATE tsl
-	SET tsl.StartDate=tbh.ChangeDate
-	FROM tblShipmentLog tsl INNER JOIN tblShipmentHistory tbh
-	ON tbh.id=tsl.StartID
-	WHERE tsl.StationID=@StationID
+		-- Aggregate PickingTime & LoadingTime in a single scan of tblShipmentLog
+		SELECT
+			@PickingTime = SUM(CASE WHEN tsl.PickingFlg = 1 THEN tsl.LogTime END),
+			@LoadingTime = SUM(CASE WHEN tsl.LoadingFlg = 1 THEN tsl.LogTime END)
+		FROM tblShipmentLog tsl
+		WHERE tsl.StationID = @StationID
+		  AND ISNULL(tsl.ExcludeFlg, 0) = 0;
 
-	UPDATE tsl
-	SET EndDate=tbh.ChangeDate
-	FROM tblShipmentLog tsl INNER JOIN tblShipmentHistory tbh
-	ON tbh.id=tsl.EndID
-	WHERE tsl.StationID=@StationID
+		-- Aggregate Outbound and Inbound Cargo metrics
+		DECLARE @ColliIn INT = 0, @WeightIn NUMERIC(18,3) = 0,
+				@ColliOut INT = 0, @WeightOut NUMERIC(18,3) = 0, @PackageOut SMALLINT = 0;
 
-	UPDATE tsl
-	SET tsl.ExcludeFlg=1
-	FROM tblShipmentLog tsl
-	WHERE tsl.StationID=@StationID AND tsl.EndID IS NULL
+		SELECT
+			@ColliOut   = ISNULL(SUM(tc.Colli), 0),
+			@WeightOut  = ISNULL(SUM(tc.Weight), 0),
+			@PackageOut = ISNULL(SUM(ci.PickedCount), 0)
+		FROM tblShipment ts
+		INNER JOIN tblCargo tc
+			ON tc.TransportID = ts.TransportID
+		   AND tc.SourceSiteCode = ts.SiteCode
+		OUTER APPLY (
+			SELECT COUNT(*) AS PickedCount
+			FROM tblCargoItem ci
+			WHERE ci.DeliveryNo = tc.DeliveryNo
+			  AND ci.TransportID = ts.TransportID
+			  AND ci.PickingFlg = 1
+		) ci
+		WHERE ts.StationID = @StationID;
 
-	UPDATE tsl
-	SET tsl.ExcludeFlg=1
-	FROM tblShipmentLog tsl
-	WHERE tsl.StationID=@StationID AND tsl.EndID IS NULL
+		SELECT
+			@ColliIn  = ISNULL(SUM(tc.Colli), 0),
+			@WeightIn = ISNULL(SUM(tc.Weight), 0)
+		FROM tblShipment ts
+		INNER JOIN tblCargo tc
+			ON tc.TransportID = ts.TransportID
+		   AND tc.DestinationSiteCode = ts.SiteCode
+		WHERE ts.StationID = @StationID;
 
-	UPDATE tsl
-	SET tsl.LogTime=DATEDIFF(mi,StartDate,EndDate)
-	FROM tblShipmentLog tsl
-	WHERE tsl.StationID=@StationID AND tsl.EndID IS NOT NULL
+		INSERT INTO tblShipmentStat (
+			SiteCode, StationID, ShipmentDate, Latency,
+			PickingTime, WaitingTime, LoadingTime, CheckOutTime,
+			ColliIn, WeightIn, ColliOut, WeightOut, PackagePrepared
+		)
+		SELECT
+			ts.SiteCode,
+			ts.StationID,
+			@MinLoadingDate,
+			DATEDIFF(MINUTE, ts.BookingDate, @MinWaitingDate),
+			@PickingTime,
+			DATEDIFF(MINUTE, @MinWaitingDate, @MinLoadingDate),
+			@LoadingTime,
+			DATEDIFF(MINUTE, ISNULL(@MaxAdminDate, @MinLoadingDate), @MaxClosedDate),
+			@ColliIn,
+			@WeightIn,
+			@ColliOut,
+			@WeightOut,
+			@PackageOut
+		FROM tblShipment ts
+		WHERE ts.StationID = @StationID;
 
-	DECLARE @CargoOut TABLE(
-		DeliveryNo VARCHAR(20),
-		WeightOut NUMERIC(18,3),
-		ColliOut SMALLINT,
-		PackageOut SMALLINT
-	)
-	INSERT INTO @CargoOut(DeliveryNo,WeightOut,ColliOut,PackageOut)
-	SELECT tc.DeliveryNo, tc.Weight,tc.Colli,(SELECT COUNT(*) FROM tblCargoItem ci WHERE ci.DeliveryNo=tc.DeliveryNo AND ci.TransportID=ts.TransportID AND ci.PickingFlg=1) FROM tblShipment ts INNER  JOIN tblCargo tc ON tc.TransportID=ts.TransportID AND tc.SourceSiteCode=ts.SiteCode
-	WHERE ts.StationID=@StationID
-
-	DECLARE @CargoIn TABLE(
-		DeliveryNo VARCHAR(20),
-		WeightIn NUMERIC(18,3),
-		ColliIn SMALLINT
-	)
-	INSERT INTO @CargoIn(DeliveryNo,WeightIn,ColliIn)
-	SELECT tc.DeliveryNo, tc.Weight,tc.Colli FROM tblShipment ts INNER  JOIN tblCargo tc ON tc.TransportID=ts.TransportID AND tc.DestinationSiteCode=ts.SiteCode
-	WHERE ts.StationID=@StationID
-
-	INSERT INTO tblShipmentStat(SiteCode,StationID,ShipmentDate,Latency,PickingTime,WaitingTime, LoadingTime,CheckOutTime, ColliIn, WeightIn,  ColliOut, WeightOut,PackagePrepared)
-	SELECT SiteCode, StationID,
-	(SELECT MIN(tbh2.ChangeDate) FROm tblShipmentHistory tbh2 WHERE tbh2.StationID=ts.StationID AND tbh2.StageFlg=1 AND tbh2.Status='loading'),--ShipmentDate
-	DATEDIFF(mi,ts.BookingDate,(SELECT tbh2.ChangeDate FROm tblShipmentHistory tbh2 WHERE tbh2.StationID=ts.StationID AND tbh2.StageFlg=1 AND tbh2.Status='waiting')), --Latency
-	(SELECT SUM(tsl.LogTime) FROM tblShipmentLog tsl WHERE tsl.StationID=@StationID AND tsl.PickingFlg=1 AND ISNULL(tsl.ExcludeFlg,0)=0), --Picking Time
-	DATEDIFF(mi,(SELECT MIN(tbh2.ChangeDate) FROm tblShipmentHistory tbh2 WHERE tbh2.StationID=ts.StationID AND tbh2.StageFlg=1 AND tbh2.Status='waiting'),
-		(SELECT MIN(tbh2.ChangeDate) FROm tblShipmentHistory tbh2 WHERE tbh2.StationID=ts.StationID AND tbh2.StageFlg=1 AND tbh2.Status='loading')), --Waiting time,
-	(SELECT SUM(tsl.LogTime) FROM tblShipmentLog tsl WHERE tsl.StationID=@StationID AND tsl.LoadingFlg=1 AND ISNULL(tsl.ExcludeFlg,0)=0), --Loading Time
-	DATEDIFF(mi,(SELECT MAX(tbh2.ChangeDate) FROm tblShipmentHistory tbh2 WHERE tbh2.StationID=ts.StationID AND tbh2.StageFlg=1 AND tbh2.Status='administration'),
-		(SELECT MAX(tbh2.ChangeDate) FROm tblShipmentHistory tbh2 WHERE tbh2.StationID=ts.StationID AND tbh2.StageFlg=1 AND tbh2.Status='closed')),
-	ISNULL((SELECT SUM(cin.ColliIn) FROM @CargoIn cin),0) ,--ColliIn
-	ISNULL((SELECT SUM(cin.WeightIn) FROM @CargoIn cin),0) ,--WeightIn
-	ISNULL((SELECT SUM(cin.ColliOut) FROM @CargoOut cin),0) ,--ColliOut
-	ISNULL((SELECT SUM(cin.WeightOut) FROM @CargoOut cin),0) ,--WeightOut
-	ISNULL((SELECT SUM(cin.PackageOut) FROM @CargoOut cin),0) --PackageOut
-	FROM tblShipment ts
-	WHERE ts.StationID=@StationID
-
-	UPDATE tblShipment
-	SET HistoryFlg=1
-	WHERE StationID=@StationID
-END TRY
-BEGIN CATCH
-	UPDATE tblShipment
-	SET HistoryFlg=0
-	WHERE StationID=@StationID
-END CATCH
+		UPDATE tblShipment
+		SET HistoryFlg = 1
+		WHERE StationID = @StationID;
+	END TRY
+	BEGIN CATCH
+		UPDATE tblShipment
+		SET HistoryFlg = 0
+		WHERE StationID = @StationID;
+	END CATCH
 END
 GO

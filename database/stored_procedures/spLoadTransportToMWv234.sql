@@ -27,6 +27,7 @@ Version 1.09
 1.07	:		Changed by Daniel Bakos, intercompany unload sap write back logic implementation 2026/01/14
 1.08	:		Changed by Daniel Bakos, add BatchNo 2026/04/28
 1.09	:		Changed by Daniel Bakos, change intercompany shipment rule logic on 2026/05/05
+1.10	:		Changed by Antigravity AI, aggregate items by DeliveryNo and ItemCode, reuse existing ItemNo on update or generate synthetic stepped ItemNo for new items, update pallet code to 80000036 on 2026/10/15
 */
 AS
 BEGIN
@@ -377,6 +378,47 @@ DECLARE @tblTransport TABLE(
 	WHERE SourceSideCode=DestinationSideCode
 
 
+	DECLARE @TransportID VARCHAR(50)
+	SELECT TOP 1 @TransportID = TransportNo FROM @tblTransport
+
+	-- Deduplicate existing tblCargoItem records if any duplicates exist for this transport
+	;WITH Dups AS (
+		SELECT 
+			id, DeliveryNo, ItemCode, ItemNo, SourceGLABsID, SourceStatus,
+			ROW_NUMBER() OVER(
+				PARTITION BY DeliveryNo, ItemCode 
+				ORDER BY 
+					CASE WHEN SourceGLABsID IS NOT NULL THEN 0 ELSE 1 END,
+					CASE WHEN SourceStatus NOT IN (-1, 3) THEN 0 ELSE 1 END,
+					id ASC
+			) AS rn
+		FROM tblCargoItem
+		WHERE TransportID = @TransportID
+	)
+	DELETE FROM tblCargoItem
+	WHERE id IN (
+		SELECT id FROM Dups WHERE rn > 1 AND SourceGLABsID IS NULL
+	);
+
+	;WITH Dups AS (
+		SELECT 
+			id, DeliveryNo, ItemCode, ItemNo, SourceGLABsID, SourceStatus,
+			ROW_NUMBER() OVER(
+				PARTITION BY DeliveryNo, ItemCode 
+				ORDER BY 
+					CASE WHEN SourceGLABsID IS NOT NULL THEN 0 ELSE 1 END,
+					CASE WHEN SourceStatus NOT IN (-1, 3) THEN 0 ELSE 1 END,
+					id ASC
+			) AS rn
+		FROM tblCargoItem
+		WHERE TransportID = @TransportID
+	)
+	UPDATE tci
+	SET tci.SourceStatus = -1, tci.DestinationStatus = -1
+	FROM tblCargoItem tci
+	INNER JOIN Dups d ON d.id = tci.id
+	WHERE d.rn > 1 AND tci.SourceGLABsID IS NOT NULL AND tci.SourceStatus NOT IN (-1, 3);
+
 	DECLARE @tblCargoItem TABLE(
 		[DeliveryNo] [varchar](100) NOT NULL,
 		[ItemNo] [varchar](10) NOT NULL,
@@ -390,13 +432,13 @@ DECLARE @tblTransport TABLE(
 		[PickingFlg] [bit] NULL,
 		[Comment] [nvarchar](500)  NULL,
 		[StockQty] [numeric](9,3) NULL,
-		[NetWeight] [numeric](9,3) NULL,
-		[GrossWeight] [numeric](9,3) NULL,
+		[NetWeight] [numeric](12,3) NULL,
+		[GrossWeight] [numeric](12,3) NULL,
 		[CopyFlg] [bit] NULL,
 		[BatchFlg] [bit] NULL
 	)
 
-		DECLARE @tblCargoItemCopy TABLE(
+	DECLARE @tblCargoItemCopy TABLE(
 		[DeliveryNo] [varchar](100) NOT NULL,
 		[OldDeliveryNo] [varchar](100) NOT NULL,
 		[ItemNo] [varchar](10) NOT NULL,
@@ -410,100 +452,217 @@ DECLARE @tblTransport TABLE(
 		[PickingFlg] [bit] NULL,
 		[Comment] [nvarchar](500)  NULL,
 		[StockQty] [numeric](9,3) NULL,
-		[NetWeight] [numeric](9,3) NULL,
-		[GrossWeight] [numeric](9,3) NULL,
+		[NetWeight] [numeric](12,3) NULL,
+		[GrossWeight] [numeric](12,3) NULL,
 		[CopyFlg] [bit] NULL,
 		[BatchFlg] [bit] NULL
 	)
 
+	DECLARE @AggregatedDeliveryItems TABLE (
+		[DeliveryNo] [varchar](100) NOT NULL,
+		[ItemCode] [nvarchar](50) NOT NULL,
+		[ItemName] [nvarchar](300) NOT NULL,
+		[OrderNo] [varchar](100) NOT NULL,
+		[Qty] [numeric](9,3) NOT NULL,
+		[QtyUnit] [varchar](10) NOT NULL,
+		[PalletQty] [numeric](9,3) NULL,
+		[StockQty] [numeric](9,3) NULL,
+		[NetWeight] [numeric](12,3) NULL,
+		[GrossWeight] [numeric](12,3) NULL,
+		[BatchFlg] [bit] NULL,
+		[Comment] [nvarchar](500) NULL,
+		[MinItemNo] [varchar](10) NULL
+	)
+
 	IF(@SourceFlg=1)
 	BEGIN
-		INSERT INTO @tblCargoItem
-		(
-			[DeliveryNo],
-			[ItemNo],
-			[ItemCode],
-			[ItemName],
-			[OrderNo],
-			[Qty],
-			[QtyUnit],
-			[QtyUnitID],
-			[PalletQty],
-			[PickingFlg],
-			[Comment],
-			[StockQty],
-			[NetWeight],
-			[GrossWeight],
-			[CopyFlg],
-			[BatchFlg]
+		INSERT INTO @AggregatedDeliveryItems (
+			DeliveryNo, ItemCode, ItemName, OrderNo, Qty, QtyUnit,
+			PalletQty, StockQty, NetWeight, GrossWeight, BatchFlg, Comment, MinItemNo
 		)
 		SELECT 
 			tdi.DeliveryNo,
-			tdi.ItemNo,
 			tdi.ItemCode,
-			tdi.ItemName,
-			tdi.OrderNo,
-			tdi.Qty,
-			tdi.QtyUnit,
-			[dbo].[fnGetQtyUnit](tdi.QtyUnit),
-			ISNULL(PalletQty,Qty),
-			CASE WHEN CAST(PalletQty%Qty AS INT)=0 THEN 0 ELSE 1 END,
-			ISNULL(tdi.Comment,''),
-			ISNULL(tdi.StockQty,0),
-			tdi.NetWeight,--CASE WHEN tdi.WeightUnit='KGM' THEN tdi.NetWeight WHEN tdi.WeightUnit='TNE' THEN (tdi.NetWeight*1000)  WHEN tdi.WeightUnit='GRM' THEN (tdi.NetWeight/1000) ELSE 0 END,
-			tdi.GrossWeight,--CASE WHEN tdi.WeightUnit='KGM' THEN tdi.GrossWeight WHEN tdi.WeightUnit='TNE' THEN (tdi.GrossWeight*1000)  WHEN tdi.WeightUnit='GRM' THEN (tdi.GrossWeight/1000) ELSE 0 END,
-			0,
-			CASE tdi.BatchFlg WHEN 'X' THEN 1 ELSE 0 END
+			MAX(tdi.ItemName),
+			MIN(tdi.OrderNo),
+			SUM(tdi.Qty),
+			MAX(tdi.QtyUnit),
+			MAX(ISNULL(tdi.PalletQty, tdi.Qty)),
+			MAX(ISNULL(tdi.StockQty, 0)),
+			SUM(ISNULL(tdi.NetWeight, 0)),
+			SUM(ISNULL(tdi.GrossWeight, 0)),
+			MAX(CASE WHEN tdi.BatchFlg = 'X' OR LTRIM(RTRIM(ISNULL(tdi.Comment, ''))) <> '' THEN 1 ELSE 0 END),
+			CASE 
+				WHEN MAX(CASE WHEN tdi.BatchFlg = 'X' OR LTRIM(RTRIM(ISNULL(tdi.Comment, ''))) <> '' THEN 1 ELSE 0 END) = 1 THEN
+					ISNULL(
+						STUFF((
+							SELECT ', ' + b.BatchName + '(' + FORMAT(b.BatchQty, '0.###') + ')'
+							FROM (
+								SELECT 
+									CASE 
+										WHEN LTRIM(RTRIM(ISNULL(c.Comment, ''))) = '' THEN 'No Batch'
+										ELSE LTRIM(RTRIM(c.Comment))
+									END AS BatchName,
+									SUM(c.Qty) AS BatchQty,
+									CASE WHEN LTRIM(RTRIM(ISNULL(c.Comment, ''))) = '' THEN 1 ELSE 0 END AS IsNoBatch,
+									MIN(c.ItemNo) AS MinSubItemNo
+								FROM tblTransferTransportDeliveryItem c
+								WHERE c.TransferID = @TransferID 
+								  AND c.DeliveryNo = tdi.DeliveryNo 
+								  AND c.ItemCode = tdi.ItemCode 
+								  AND c.Qty > 0
+								GROUP BY 
+									CASE 
+										WHEN LTRIM(RTRIM(ISNULL(c.Comment, ''))) = '' THEN 'No Batch'
+										ELSE LTRIM(RTRIM(c.Comment))
+									END,
+									CASE WHEN LTRIM(RTRIM(ISNULL(c.Comment, ''))) = '' THEN 1 ELSE 0 END
+							) b
+							ORDER BY b.IsNoBatch ASC, b.MinSubItemNo ASC
+							FOR XML PATH(''), TYPE
+						).value('.', 'NVARCHAR(MAX)'), 1, 2, ''),
+						''
+					)
+				ELSE ''
+			END,
+			MIN(tdi.ItemNo)
 		FROM tblTransferTransportDeliveryItem tdi
-		WHERE tdi.TransferID=@TransferID
-		--AND [dbo].[fnGetValidTaxCode](tdi.TaxCode,tdi.ItemCode)=1
-		AND tdi.Qty>0
+		WHERE tdi.TransferID = @TransferID
+		  AND tdi.Qty > 0
+		GROUP BY tdi.DeliveryNo, tdi.ItemCode
 	END
 	ELSE
 	BEGIN
-		INSERT INTO @tblCargoItem
-		(
-			[DeliveryNo],
-			[ItemNo],
-			[ItemCode],
-			[ItemName],
-			[OrderNo],
-			[Qty],
-			[QtyUnit],
-			[QtyUnitID],
-			[PalletQty],
-			[PickingFlg],
-			[Comment],
-			[StockQty],
-			[NetWeight],
-			[GrossWeight],
-			[CopyFlg],
-			[BatchFlg]
+		INSERT INTO @AggregatedDeliveryItems (
+			DeliveryNo, ItemCode, ItemName, OrderNo, Qty, QtyUnit,
+			PalletQty, StockQty, NetWeight, GrossWeight, BatchFlg, Comment, MinItemNo
 		)
 		SELECT 
 			tdi.DeliveryNo,
-			tdi.ItemNo,
 			tdi.ItemCode,
-			tdi.ItemName,
-			tdi.OrderNo,
-			tdi.Qty,
-			tdi.QtyUnit,
-			[dbo].[fnGetQtyUnit](tdi.QtyUnit),
-			ISNULL(PalletQty,Qty),
-			CASE WHEN CAST(PalletQty%Qty AS INT)=0 THEN 0 ELSE 1 END,
-			ISNULL(tdi.Comment,''),
-			ISNULL(tdi.StockQty,0),
-			tdi.NetWeight,--CASE WHEN tdi.WeightUnit='KGM' THEN tdi.NetWeight WHEN tdi.WeightUnit='TNE' THEN (tdi.NetWeight*1000)  WHEN tdi.WeightUnit='GRM' THEN (tdi.NetWeight/1000) ELSE 0 END,
-			tdi.GrossWeight,--CASE WHEN tdi.WeightUnit='KGM' THEN tdi.GrossWeight WHEN tdi.WeightUnit='TNE' THEN (tdi.GrossWeight*1000)  WHEN tdi.WeightUnit='GRM' THEN (tdi.GrossWeight/1000) ELSE 0 END,
-			0,
-			CASE tdi.BatchFlg WHEN 'X' THEN 1 ELSE 0 END
+			MAX(tdi.ItemName),
+			MIN(tdi.OrderNo),
+			SUM(tdi.Qty),
+			MAX(tdi.QtyUnit),
+			MAX(ISNULL(tdi.PalletQty, tdi.Qty)),
+			MAX(ISNULL(tdi.StockQty, 0)),
+			SUM(ISNULL(tdi.NetWeight, 0)),
+			SUM(ISNULL(tdi.GrossWeight, 0)),
+			MAX(CASE WHEN tdi.BatchFlg = 'X' OR LTRIM(RTRIM(ISNULL(tdi.Comment, ''))) <> '' THEN 1 ELSE 0 END),
+			CASE 
+				WHEN MAX(CASE WHEN tdi.BatchFlg = 'X' OR LTRIM(RTRIM(ISNULL(tdi.Comment, ''))) <> '' THEN 1 ELSE 0 END) = 1 THEN
+					ISNULL(
+						STUFF((
+							SELECT ', ' + b.BatchName + '(' + FORMAT(b.BatchQty, '0.###') + ')'
+							FROM (
+								SELECT 
+									CASE 
+										WHEN LTRIM(RTRIM(ISNULL(c.Comment, ''))) = '' THEN 'No Batch'
+										ELSE LTRIM(RTRIM(c.Comment))
+									END AS BatchName,
+									SUM(c.Qty) AS BatchQty,
+									CASE WHEN LTRIM(RTRIM(ISNULL(c.Comment, ''))) = '' THEN 1 ELSE 0 END AS IsNoBatch,
+									MIN(c.ItemNo) AS MinSubItemNo
+								FROM tblTransferTransportDeliveryItemArchive c
+								WHERE c.TransferID = @TransferID 
+								  AND c.DeliveryNo = tdi.DeliveryNo 
+								  AND c.ItemCode = tdi.ItemCode 
+								  AND c.Qty > 0
+								GROUP BY 
+									CASE 
+										WHEN LTRIM(RTRIM(ISNULL(c.Comment, ''))) = '' THEN 'No Batch'
+										ELSE LTRIM(RTRIM(c.Comment))
+									END,
+									CASE WHEN LTRIM(RTRIM(ISNULL(c.Comment, ''))) = '' THEN 1 ELSE 0 END
+							) b
+							ORDER BY b.IsNoBatch ASC, b.MinSubItemNo ASC
+							FOR XML PATH(''), TYPE
+						).value('.', 'NVARCHAR(MAX)'), 1, 2, ''),
+						''
+					)
+				ELSE ''
+			END,
+			MIN(tdi.ItemNo)
 		FROM tblTransferTransportDeliveryItemArchive tdi
-		WHERE tdi.TransferID=@TransferID
-		--AND [dbo].[fnGetValidTaxCode](tdi.TaxCode,tdi.ItemCode)=1
-		AND tdi.Qty>0
+		WHERE tdi.TransferID = @TransferID
+		  AND tdi.Qty > 0
+		GROUP BY tdi.DeliveryNo, tdi.ItemCode
 	END
 
-	
+	;WITH ItemMapping AS (
+		SELECT 
+			adi.DeliveryNo,
+			adi.ItemCode,
+			adi.ItemName,
+			adi.OrderNo,
+			adi.Qty,
+			adi.QtyUnit,
+			adi.PalletQty,
+			adi.StockQty,
+			adi.NetWeight,
+			adi.GrossWeight,
+			adi.BatchFlg,
+			adi.Comment,
+			adi.MinItemNo,
+			ExistingItemNo = (
+				SELECT TOP 1 tci.ItemNo 
+				FROM tblCargoItem tci 
+				WHERE tci.DeliveryNo = adi.DeliveryNo 
+				  AND tci.ItemCode = adi.ItemCode 
+				  AND tci.TransportID = @TransportID
+				ORDER BY 
+					CASE WHEN tci.SourceGLABsID IS NOT NULL THEN 0 ELSE 1 END,
+					CASE WHEN ISNULL(tci.SourceStatus, 0) NOT IN (-1, 3) THEN 0 ELSE 1 END,
+					tci.id ASC
+			),
+			BaseNo = ISNULL((
+				SELECT MAX(TRY_CAST(tci.ItemNo AS INT))
+				FROM tblCargoItem tci
+				WHERE tci.DeliveryNo = adi.DeliveryNo 
+				  AND tci.TransportID = @TransportID
+			), 0),
+			NewSeq = ROW_NUMBER() OVER(
+				PARTITION BY adi.DeliveryNo, 
+					CASE WHEN EXISTS (
+						SELECT 1 FROM tblCargoItem tci 
+						WHERE tci.DeliveryNo = adi.DeliveryNo 
+						  AND tci.ItemCode = adi.ItemCode 
+						  AND tci.TransportID = @TransportID
+					) THEN 0 ELSE 1 END
+				ORDER BY adi.MinItemNo
+			)
+		FROM @AggregatedDeliveryItems adi
+	)
+	INSERT INTO @tblCargoItem (
+		[DeliveryNo], [ItemNo], [ItemCode], [ItemName], [OrderNo],
+		[Qty], [QtyUnit], [QtyUnitID], [PalletQty], [PickingFlg],
+		[Comment], [StockQty], [NetWeight], [GrossWeight], [CopyFlg], [BatchFlg]
+	)
+	SELECT 
+		m.DeliveryNo,
+		CASE 
+			WHEN m.ExistingItemNo IS NOT NULL THEN m.ExistingItemNo
+			ELSE RIGHT('000000' + CAST(m.BaseNo + (m.NewSeq * 10) AS VARCHAR(10)), 6)
+		END AS ItemNo,
+		m.ItemCode,
+		m.ItemName,
+		m.OrderNo,
+		m.Qty,
+		m.QtyUnit,
+		[dbo].[fnGetQtyUnit](m.QtyUnit),
+		m.PalletQty,
+		CASE 
+			WHEN ISNULL(m.PalletQty, 0) = 0 OR CAST(m.Qty AS INT) % CAST(m.PalletQty AS INT) = 0 THEN 0 
+			ELSE 1 
+		END AS PickingFlg,
+		m.Comment,
+		m.StockQty,
+		m.NetWeight,
+		m.GrossWeight,
+		0 AS CopyFlg,
+		m.BatchFlg
+	FROM ItemMapping m;
+
 	--Update Collidata
 	UPDATE t
 	SET t.Colli=ISNULL((SELECT SUM(CEILING(it.Qty/it.PalletQty)) FROM @tblCargoItem it WHERE it.DeliveryNo=t.DeliveryNo AND ISNULL(it.PalletQty,0)>0),0)
@@ -534,8 +693,11 @@ DECLARE @tblTransport TABLE(
 	SELECT TOP 1 @tmpTransportNo= TransportNo FROM @tblTransport
 
 	INSERT INTO @PalletLogic(PartnerID,DeliveryCnt,DeliveryNo,PalletNo,SrcDeliveryNo)
-	SELECT tc.SourcePartnerID,COUNT(DISTINCT tci.DeliveryNo),@tmpTransportNo+LEFT(tc.SourcePartnerID,2)+RIGHT(tc.SourcePartnerID,2),SUM(tci.Qty), MIN(tc.DeliveryNo) FROM @tblCargo tc INNER JOIN @tblCargoItem tci ON tci.DeliveryNo=tc.DeliveryNo
-	WHERE tci.ItemCode='K00890000' AND tc.Direction=0
+	SELECT tc.SourcePartnerID,COUNT(DISTINCT tci.DeliveryNo),@tmpTransportNo+LEFT(tc.SourcePartnerID,2)+RIGHT(tc.SourcePartnerID,2),SUM(tci.Qty), MIN(tc.DeliveryNo) 
+	FROM @tblCargo tc 
+	INNER JOIN @tblCargoItem tci ON tci.DeliveryNo=tc.DeliveryNo
+	WHERE (tci.ItemCode IN ('80000036', 'K00890000') OR EXISTS (SELECT 1 FROM tblXrefExceptions xe WHERE xe.ExType = 'PalletItemCode' AND xe.ExValue = tci.ItemCode)) 
+	  AND tc.Direction=0
 	GROUP BY tc.SourcePartnerID
 
 	DELETE FROM @PalletLogic WHERE DeliveryCnt=1
@@ -560,16 +722,19 @@ DECLARE @tblTransport TABLE(
 			[GrossWeight],
 			[CopyFlg],
 			[BatchFlg]
-
 		)
-	SELECT DISTINCT  pl.DeliveryNo,'', '000001', tci.ItemCode, tci.ItemName, '', pl.PalletNo, tci.QtyUnit, tci.QtyUnitID, tci.PalletQty,tci.PickingFlg,tci.Comment,tci.StockQty,tci.NetWeight, tci.GrossWeight,1, tci.BatchFlg
-		FROM @tblCargo tc INNER JOIN @tblCargoItem tci ON tci.DeliveryNo=tc.DeliveryNo
-		INNER JOIN @PalletLogic pl ON pl.PartnerID=tc.SourcePartnerID
-		WHERE tci.ItemCode = 'K00890000'
+	SELECT pl.DeliveryNo, '', '000001', tci.ItemCode, MAX(tci.ItemName), '', pl.PalletNo, MAX(tci.QtyUnit), MAX(tci.QtyUnitID), MAX(tci.PalletQty), MAX(CAST(tci.PickingFlg AS INT)), MAX(tci.Comment), MAX(tci.StockQty), SUM(tci.NetWeight), SUM(tci.GrossWeight), 1, MAX(CAST(tci.BatchFlg AS INT))
+	FROM @tblCargo tc 
+	INNER JOIN @tblCargoItem tci ON tci.DeliveryNo=tc.DeliveryNo
+	INNER JOIN @PalletLogic pl ON pl.PartnerID=tc.SourcePartnerID
+	WHERE (tci.ItemCode IN ('80000036', 'K00890000') OR EXISTS (SELECT 1 FROM tblXrefExceptions xe WHERE xe.ExType = 'PalletItemCode' AND xe.ExValue = tci.ItemCode))
+	GROUP BY pl.DeliveryNo, tci.ItemCode, pl.PalletNo
 
 	--DELETE All Items(singel Items)
-	DELETE tci FROM @tblCargoItem tci INNER JOIN @tblCargo tc ON tc.DeliveryNo=tci.DeliveryNo INNER JOIN @PalletLogic pl ON pl.PartnerID=tc.SourcePartnerID
-	WHERE tci.ItemCode='K00890000'
+	DELETE tci FROM @tblCargoItem tci 
+	INNER JOIN @tblCargo tc ON tc.DeliveryNo=tci.DeliveryNo 
+	INNER JOIN @PalletLogic pl ON pl.PartnerID=tc.SourcePartnerID
+	WHERE (tci.ItemCode IN ('80000036', 'K00890000') OR EXISTS (SELECT 1 FROM tblXrefExceptions xe WHERE xe.ExType = 'PalletItemCode' AND xe.ExValue = tci.ItemCode))
 
 	INSERT INTO @tblCargoItem
 		(
@@ -914,8 +1079,10 @@ DECLARE @tblTransport TABLE(
 		  WHERE NOT EXISTS(SELECT * FROm tblShipment tss WHERE tss.TransportID=ts.TransportID AND tss.SiteCode=ts.SiteCode)
 	END
 
-	DECLARE @TransportID VARCHAR(50)
-	SELECT @TransportID=ts.TransportID FROM @tblShipment ts
+	IF (@TransportID IS NULL)
+	BEGIN
+		SELECT @TransportID=ts.TransportID FROM @tblShipment ts
+	END
 
 	--Update Cargos
 	UPDATE tc
@@ -973,17 +1140,30 @@ DECLARE @tblTransport TABLE(
 	AND NOT EXISTS(SELECT * FROM @tblCargo tcc WHERE tcc.DeliveryNo=tc.DeliveryNo)
 	
 	
-	--Items
+	--Items: Match on DeliveryNo and ItemCode to prevent duplicate rows and picking lock delete failures
 	UPDATE tci
-	SET tci.Qty=tcci.Qty, tci.PalletQty=tcci.PalletQty, tci.QtyUnitID=tcci.QtyUnitID,tci.SourceStatus=0,tci.DestinationStatus=0, tci.PickingFlg=tcci.PickingFlg, tci.StockQty=tcci.StockQty, tci.OrderNo=tcci.OrderNo, 
-	tci.NetWeight=tcci.NetWeight, tci.GrossWeight=tcci.GrossWeight, tci.BatchFlg=tcci.BatchFlg, tci.Comment=tcci.Comment
-	FROM tblCargoItem tci INNER JOIN @tblCargoItem tcci ON tcci.DeliveryNo=tci.DeliveryNo AND tcci.ItemNo=tci.ItemNo AND tci.TransportID=@TransportID 
-	AND ((tci.Qty<>tcci.Qty OR tci.PalletQty<>tcci.PalletQty OR tci.QtyUnitID<>tcci.QtyUnitID OR tci.PickingFlg<>tcci.PickingFlg OR tci.StockQty<>tcci.StockQty OR tci.BatchFlg<>tcci.BatchFlg OR tci.Comment<>tcci.Comment) 
-	OR (tci.DestinationStatus=2 OR tci.SourceStatus=2))
-
-	UPDATE tci
-	SET tci.ItemCode=tcci.ItemCode, tci.ItemName=tcci.ItemName,tci.SourceStatus=0,tci.DestinationStatus=0
-	FROM tblCargoItem tci INNER JOIN @tblCargoItem tcci ON tcci.DeliveryNo=tci.DeliveryNo AND tcci.ItemNo=tci.ItemNo AND tci.TransportID=@TransportID AND tcci.ItemCode<>tci.ItemCode
+	SET tci.Qty=tcci.Qty, 
+	    tci.PalletQty=tcci.PalletQty, 
+	    tci.QtyUnitID=tcci.QtyUnitID,
+	    tci.SourceStatus=0,
+	    tci.DestinationStatus=0, 
+	    tci.PickingFlg=tcci.PickingFlg, 
+	    tci.StockQty=tcci.StockQty, 
+	    tci.OrderNo=tcci.OrderNo, 
+	    tci.NetWeight=tcci.NetWeight, 
+	    tci.GrossWeight=tcci.GrossWeight, 
+	    tci.BatchFlg=tcci.BatchFlg, 
+	    tci.Comment=tcci.Comment,
+	    tci.ItemName=tcci.ItemName
+	FROM tblCargoItem tci 
+	INNER JOIN @tblCargoItem tcci 
+	    ON tcci.DeliveryNo=tci.DeliveryNo 
+	   AND tcci.ItemCode=tci.ItemCode 
+	   AND tcci.ItemNo=tci.ItemNo 
+	   AND tci.TransportID=@TransportID 
+	WHERE ISNULL(tci.SourceStatus, 0) NOT IN (-1, 3)
+	  AND ((ISNULL(tci.Qty,0)<>ISNULL(tcci.Qty,0) OR ISNULL(tci.PalletQty,0)<>ISNULL(tcci.PalletQty,0) OR ISNULL(tci.QtyUnitID,'')<>ISNULL(tcci.QtyUnitID,'') OR ISNULL(tci.PickingFlg,0)<>ISNULL(tcci.PickingFlg,0) OR ISNULL(tci.StockQty,0)<>ISNULL(tcci.StockQty,0) OR ISNULL(tci.BatchFlg,0)<>ISNULL(tcci.BatchFlg,0) OR ISNULL(tci.Comment,'')<>ISNULL(tcci.Comment,'') OR ISNULL(tci.NetWeight,0)<>ISNULL(tcci.NetWeight,0) OR ISNULL(tci.GrossWeight,0)<>ISNULL(tcci.GrossWeight,0)) 
+	   OR (tci.DestinationStatus=2 OR tci.SourceStatus=2))
 
 	INSERT INTO [dbo].[tblCargoItem]
 			   ([DeliveryNo]
@@ -1029,14 +1209,23 @@ DECLARE @tblTransport TABLE(
 		tci.BatchFlg
 	FROM @tblCargoItem tci 
 	WHERE NOT EXISTS(
-	SELECT * FROM tblCargoItem tcci WHERE tcci.DeliveryNo=tci.DeliveryNo AND tcci.ItemNo=tci.ItemNo AND tcci.TransportID=@TransportID
+		SELECT * FROM tblCargoItem tcci 
+		WHERE tcci.DeliveryNo=tci.DeliveryNo 
+		  AND tcci.ItemCode=tci.ItemCode 
+		  AND tcci.TransportID=@TransportID
+		  AND ISNULL(tcci.SourceStatus, 0) NOT IN (-1, 3)
 	)
 
 	UPDATE tci
 	SET tci.SourceStatus=-1, tci.DestinationStatus=-1
 	FROM tblCargoItem tci 
 	WHERE tci.DeliveryNo IN(SELECT tca.DeliveryNo FROM @tblCargo tca)
-	AND NOT EXISTS(SELECT * FROM @tblCargoItem tcci WHERE tcci.DeliveryNo=tci.DeliveryNo AND tcci.ItemNo=tci.ItemNo AND tci.TransportID=@TransportID )
+	  AND tci.TransportID=@TransportID
+	  AND NOT EXISTS(
+		SELECT * FROM @tblCargoItem tcci 
+		WHERE tcci.DeliveryNo=tci.DeliveryNo 
+		  AND tcci.ItemCode=tci.ItemCode
+	  )
 	-----------
 
 	--Archive

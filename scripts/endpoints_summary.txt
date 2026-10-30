@@ -1,0 +1,339 @@
+=== spAddCargoItem.sql ===
+  Methods: ['POST']
+  URLs: ["tcpr.[url]+'api/'+tcpr.[profile id]+'/shipments/'+@ShipmentID+'/cargos/'+@CargoID+'/items' FROM [dbo].[tblClientParams] tcpr WHERE tcpr.SiteCode=@SiteCode", "REPLACE(@URL,'#','%23')"]
+  TransferType: ["tt.id FROM tblTransferType tt WHERE tt.TransferType='Partner'"]
+  JSON types: []
+  OPENJSON: CargoItemID NVARCHAR(100...
+
+=== spAddCargoItemv223.sql ===
+  Methods: ['POST']
+  URLs: ["tcpr.[url]+'api/'+tcpr.[profile id]+'/cargo-operations/'+@ShipmentID+'/items' FROM [dbo].[tblClientParams] tcpr WHERE tcpr.SiteCode=@SiteCode", "REPLACE(@URL,'#','%23')"]
+  TransferType: ['5']
+  JSON types: []
+  OPENJSON: CargoItemID NVARCHAR(100...
+
+=== spCheckGate.sql ===
+  Methods: ['GET']
+  URLs: ["tg.GateAddress+'api2.cgi?p='+tg.Password+'&sw='+tg.GateNo FROM tblGate tg WHERE tg.id=@GateID", "'http://10.180.80.104/api2.cgi?p=pulsator1234&t0=2&sw='+@GateNo+'&v=1'", "'http://10.180.80.104/api2.cgi?p=pulsator1234&sw='+@GateNo"]
+  TransferType: ['34']
+  JSON types: []
+
+=== spCreateCall.sql ===
+  Methods: ['POST']
+  URLs: ["tcpr.[url]+'api/'+tcpr.[profile id]+'/calls' FROM [dbo].[tblClientParams] tcpr WHERE tcpr.SiteCode=@SiteCode"]
+  TransferType: ['19']
+  JSON types: []
+  OPENJSON: CallID NVARCHAR(50...
+
+=== spCreateCargo.sql ===
+  Methods: ['POST']
+  URLs: ["tcpr.[url]+'api/'+tcpr.[profile id]+'/shipments/cargos' FROM [dbo].[tblClientParams] tcpr WHERE tcpr.SiteCode=@SiteCode"]
+  TransferType: ["tt.id FROM tblTransferType tt WHERE tt.TransferType='Partner'"]
+  JSON types: []
+  OPENJSON: CargoID NVARCHAR(100...
+
+=== spCreateCargov223.sql ===
+  Methods: ['POST']
+  URLs: ["tcpr.[url]+'api/'+tcpr.[profile id]+'/shipments/cargos' FROM [dbo].[tblClientParams] tcpr WHERE tcpr.SiteCode=@SiteCode"]
+  TransferType: ['2']
+  JSON types: []
+  OPENJSON: CargoID NVARCHAR(100...
+
+=== spCreateCheckOut.sql ===
+  Methods: ['PUT']
+  URLs: ["tcpr.[url]+'api/'+tcpr.[profile id]+'/stations/'+@StationID+'/checkout' FROM [dbo].[tblClientParams] tcpr WHERE tcpr.SiteCode=@SiteCode"]
+  TransferType: ['13']
+  JSON types: []
+  OPENJSON: Success NVARCHAR(100...
+
+=== spCreateCheckOutv223.sql ===
+  Methods: ['PUT']
+  URLs: ["tcpr.[url]+'api/'+tcpr.[profile id]+'/stations/'+@StationID+'/checkout' FROM [dbo].[tblClientParams] tcpr WHERE tcpr.SiteCode=@SiteCode"]
+  TransferType: ['13']
+  JSON types: []
+  OPENJSON: Success NVARCHAR(100...
+
+=== spCreateDelegation.sql ===
+  Methods: ['PATCH']
+  URLs: ["tcpr.[url]+'api/'+tcpr.[profile id]+'/shipments/'+@ShipmentNo FROM [dbo].[tblClientParams] tcpr WHERE tcpr.SiteCode=@SiteCode"]
+  TransferType: ['8']
+  JSON types: []
+  OPENJSON: ShipmentID NVARCHAR(100...
+
+=== spCreateEntry.sql ===
+  Methods: ['PUT']
+  URLs: ["tcpr.[url]+'api/'+tcpr.[profile id]+'/stations/'+@StationID+'/crossings/last' FROM [dbo].[tblClientParams] tcpr WHERE tcpr.SiteCode=@SiteCode"]
+  TransferType: ['10']
+  JSON types: []
+  OPENJSON: Success NVARCHAR(100...
+
+=== spCreateFileS4.sql ===
+  Methods: ['POST']
+  URLs: ["tcpr.[url]+'api/'+tcpr.[profile id]+'/shipments/cargos/'+@CargoID+'/documents' FROM [dbo].[tblClientParams] tcpr WHERE tcpr.SiteCode=@SiteCode", "REPLACE(@URL,'#','%23')"]
+  TransferType: ['15']
+  JSON types: []
+  OPENJSON: DocumentID NVARCHAR(100...
+
+=== spCreateFile_depr.sql ===
+  Methods: ['POST']
+  URLs: ["tcpr.[url]+'api/'+tcpr.[profile id]+'/shipments/cargos/'+@CargoID+'/documents' FROM [dbo].[tblClientParams] tcpr WHERE tcpr.SiteCode=@SiteCode", "REPLACE(@URL,'#','%23')"]
+  TransferType: ['15']
+  JSON types: []
+  OPENJSON: DocumentID NVARCHAR(100...
+
+=== spCreatePartner.sql ===
+  Methods: ['POST', 'PATCH']
+  URLs: ["tcpr.[url]+'api/'+tcpr.[profile id]+'/partners' FROM [dbo].[tblClientParams] tcpr WHERE tcpr.SiteCode=@SiteCode", "tcpr.[url]+'api/'+tcpr.[profile id]+'/partners/'+@ID FROM [dbo].[tblClientParams] tcpr WHERE tcpr.SiteCode=@SiteCode"]
+  TransferType: ['1']
+  JSON types: []
+  OPENJSON: GLABsID NVARCHAR(100...
+
+=== spDeleteCall.sql ===
+  Methods: ['PATCH']
+  URLs: ["tcpr.[url]+'api/'+tcpr.[profile id]+'/stations/'+@StationID+'/call' FROM [dbo].[tblClientParams] tcpr WHERE tcpr.SiteCode=@SiteCode"]
+  TransferType: ['18']
+  JSON types: []
+
+=== spDeleteCargoItem.sql ===
+  Methods: ['DELETE']
+  URLs: ["tcpr.[url]+'api/'+tcpr.[profile id]+'/shipments/'+@ShipmentID+'/cargos/'+@CargoID+'/items/'+@RowID FROM [dbo].[tblClientParams] tcpr WHERE tcpr.SiteCode=@SiteCode", "REPLACE(@URL,'#','%23')"]
+  TransferType: ["tt.id FROM tblTransferType tt WHERE tt.TransferType='Partner'"]
+  JSON types: []
+
+=== spDeleteCargoItemv223.sql ===
+  Methods: ['DELETE']
+  URLs: ["tcpr.[url]+'api/'+tcpr.[profile id]+'/cargo-operations/'+@ShipmentID+'/items/'+@RowID FROM [dbo].[tblClientParams] tcpr WHERE tcpr.SiteCode=@SiteCode", "REPLACE(@URL,'#','%23')"]
+  TransferType: ['7']
+  JSON types: []
+
+=== spDeleteCargov223.sql ===
+  Methods: ['DELETE']
+  URLs: ["tcpr.[url]+'api/'+tcpr.[profile id]+'/shipments/'+@ShipmentID+'/cargos/'+@CargoDelID FROM [dbo].[tblClientParams] tcpr WHERE tcpr.SiteCode=@SiteCode", "REPLACE(@URL,'#','%23')"]
+  TransferType: ['4']
+  JSON types: []
+
+=== spDeleteTransportv223.sql ===
+  Methods: ['DELETE']
+  URLs: ["tcpr.[url]+'api/'+tcpr.[profile id]+'/shipments/'+@ShipmentID FROM [dbo].[tblClientParams] tcpr WHERE tcpr.SiteCode=@SiteCode", "REPLACE(@URL,'#','%23')"]
+  TransferType: ['14']
+  JSON types: []
+
+=== spGetCalls.sql ===
+  Methods: ['GET']
+  URLs: ["tcpr.[url]+'api/'+tcpr.[profile id]+'/stations?&filter[expr]=(call!=NULL)'+@Filter FROM [dbo].[tblClientParams] tcpr WHERE tcpr.SiteCode=@SiteCode"]
+  TransferType: []
+  JSON types: []
+  OPENJSON: id NVARCHAR(100...
+
+=== spGetEntryPermission.sql ===
+  Methods: ['GET']
+  URLs: ["tcpr.[url]+'api/'+tcpr.[profile id]+'/entry-permissions?filter[actual]=1'+@Filter FROM [dbo].[tblClientParams] tcpr WHERE tcpr.SiteCode=@SiteCode"]
+  TransferType: []
+  JSON types: []
+  OPENJSON: PermissionID NVARCHAR(100...
+
+=== spGetExpectedArrivalDate.sql ===
+  Methods: ['GET']
+  URLs: ["tcpr.[url]+'api/'+tcpr.[profile id]+'/cargo-operations/'+@OperationID FROM [dbo].[tblClientParams] tcpr WHERE tcpr.SiteCode=@SiteCode"]
+  TransferType: ["tt.id FROM tblTransferType tt WHERE tt.TransferType='Partner'"]
+  JSON types: []
+  OPENJSON: estimatedArrival BIGINT '$.estimatedArrival'...
+
+=== spGetLicensePlateNo.sql ===
+  Methods: ['GET']
+  URLs: ["tcpr.[url]+'api/'+tcpr.[profile id]+'/shipments/'+@ShipmentID FROM [dbo].[tblClientParams] tcpr WHERE tcpr.SiteCode=@SiteCode"]
+  TransferType: ["tt.id FROM tblTransferType tt WHERE tt.TransferType='Partner'"]
+  JSON types: []
+  OPENJSON: LicensePlateNo1 NVARCHAR(50...
+
+=== spGetShipment.sql ===
+  Methods: ['GET']
+  URLs: ["tcpr.[url]+'api/'+tcpr.[profile id]+'/shipments/'+@ShipmentID FROM [dbo].[tblClientParams] tcpr WHERE tcpr.SiteCode=@SiteCode"]
+  TransferType: ["tt.id FROM tblTransferType tt WHERE tt.TransferType='Partner'"]
+  JSON types: []
+  OPENJSON: LicensePlateNo NVARCHAR(50...
+
+=== spGetStation.sql ===
+  Methods: ['GET']
+  URLs: ["tcpr.[url]+'api/'+tcpr.[profile id]+'/stations/'+@StationID FROM [dbo].[tblClientParams] tcpr WHERE tcpr.SiteCode=@SiteCode"]
+  TransferType: ["tt.id FROM tblTransferType tt WHERE tt.TransferType='Partner'"]
+  JSON types: []
+  OPENJSON: Stage NVARCHAR(50...
+
+=== spGetStationHistory.sql ===
+  Methods: ['GET']
+  URLs: ["tcpr.[url]+'api/'+tcpr.[profile id]+'/stations/'+@StationID+'?include=stages,pickingWorks,stages.creator,pickingWorks.creator,currentBooking,currentBooking.creator' FROM [dbo].[tblClientParams] tcpr WHERE tcpr.SiteCode=@SiteCode"]
+  TransferType: ['23']
+  JSON types: []
+  OPENJSON: DataType VARCHAR(50...
+
+=== spGetStationInProgress.sql ===
+  Methods: ['GET']
+  URLs: ["tcpr.[url]+'api/'+tcpr.[profile id]+'/stations/'+@StationID FROM [dbo].[tblClientParams] tcpr WHERE tcpr.SiteCode=@SiteCode"]
+  TransferType: ["tt.id FROM tblTransferType tt WHERE tt.TransferType='Get Station'"]
+  JSON types: []
+  OPENJSON: currentPickingStatus VARCHAR(100...
+
+=== spGetUnplanned.sql ===
+  Methods: ['GET']
+  URLs: ["tcpr.[url]+'api/'+tcpr.[profile id]+'/unplanned-traffics?filter[status]=entered'+@Filter FROM [dbo].[tblClientParams] tcpr WHERE tcpr.SiteCode=@SiteCode"]
+  TransferType: []
+  JSON types: []
+  OPENJSON: id NVARCHAR(100...
+
+=== spListBookings.sql ===
+  Methods: ['GET']
+  URLs: ["tcpr.[url]+'api/'+tcpr.[profile id]+'/stations'+@Filter FROM [dbo].[tblClientParams] tcpr WHERE tcpr.SiteCode=@SiteCode"]
+  TransferType: ["tt.id FROM tblTransferType tt WHERE tt.TransferType='Partner'"]
+  JSON types: []
+  OPENJSON: StationID NVARCHAR(100...
+
+=== spListCargo232_depr.sql ===
+  Methods: ['GET']
+  URLs: ["tcpr.[url]+'api/'+tcpr.[profile id]+'/stations'+@Filter FROM [dbo].[tblClientParams] tcpr WHERE tcpr.SiteCode=@SiteCode"]
+  TransferType: ['9']
+  JSON types: []
+  OPENJSON: StationID NVARCHAR(100...
+
+=== spListCargoS4.sql ===
+  Methods: ['GET']
+  URLs: ["tcpr.[url]+'api/'+tcpr.[profile id]+'/stations'+@Filter FROM [dbo].[tblClientParams] tcpr WHERE tcpr.SiteCode=@SiteCode"]
+  TransferType: ['9']
+  JSON types: []
+  OPENJSON: StationID NVARCHAR(100...
+
+=== spListLoadingOrder.sql ===
+  Methods: ['GET']
+  URLs: ["tcpr.[url]+'api/'+tcpr.[profile id]+'/stations'+@Filter FROM [dbo].[tblClientParams] tcpr WHERE tcpr.SiteCode=@SiteCode"]
+  TransferType: []
+  JSON types: []
+  OPENJSON: StationID NVARCHAR(100...
+
+=== spListPartners.sql ===
+  Methods: ['GET']
+  URLs: ["tcpr.[url]+'api/'+tcpr.[profile id]+'/partners'+@Filter FROM [dbo].[tblClientParams] tcpr WHERE tcpr.SiteCode=@SiteCode"]
+  TransferType: ['20']
+  JSON types: []
+  OPENJSON: id VARCHAR(50...
+
+=== spListRamps.sql ===
+  Methods: ['GET']
+  URLs: ["tcpr.[url]+'api/'+tcpr.[profile id]+'/ramps'+@Filter FROM [dbo].[tblClientParams] tcpr WHERE tcpr.SiteCode=@SiteCode"]
+  TransferType: []
+  JSON types: []
+  OPENJSON: RampID VARCHAR(50...
+
+=== spOpenGate.sql ===
+  Methods: ['GET']
+  URLs: ["tg.GateAddress+'api2.cgi?p='+tg.Password+'&t0=2&sw='+tg.GateNo+'&v=1' FROM tblGate tg WHERE tg.id=@GateID"]
+  TransferType: ['34']
+  JSON types: []
+
+=== spSAPUpdateS4.sql ===
+  Methods: ['POST']
+  URLs: ['tcpr.[SAPUrl], @UserName=tcpr.SAPUserName, @Password=tcpr.SAPPassword FROM [dbo].[tblClientParams] tcpr WHERE tcpr.SiteCode=@SiteCode']
+  TransferType: ['12']
+  JSON types: []
+
+=== spSAPUpdate_depr.sql ===
+  Methods: ['POST']
+  URLs: ['tcpr.[SAPUrl], @UserName=tcpr.SAPUserName, @Password=tcpr.SAPPassword FROM [dbo].[tblClientParams] tcpr WHERE tcpr.SiteCode=@SiteCode']
+  TransferType: ['12']
+  JSON types: []
+
+=== spSendLogMsg.sql ===
+  Methods: []
+  URLs: ['tou.URL,@Header=tou.Header, @Status = tou.StatusDesc, @StatusCode = tou.StatusCode FROM tblTransferOut tou WHERE tou.id=@TransferOut']
+  TransferType: []
+  JSON types: []
+
+=== spSendWebBinaryRequest.sql ===
+  Methods: []
+  URLs: ['tou.URL, @Header = tou.Header, @Body=tou.Body, @MsgType = tou.MsgType, @MsgMethod=tou.MsgMethod,@ResponseAccept=tou.ResponseAccept FROM tblTransferOut  tou WHERE tou.id=@TransferID', '@URL,']
+  TransferType: []
+  JSON types: []
+
+=== spSendWebBinaryRequestCLR.sql ===
+  Methods: []
+  URLs: []
+  TransferType: []
+  JSON types: []
+
+=== spSendWebRequest.sql ===
+  Methods: []
+  URLs: ['tou.URL, @Header = tou.Header, @Body=tou.Body, @MsgType = tou.MsgType, @MsgMethod=tou.MsgMethod,@ResponseAccept=tou.ResponseAccept FROM tblTransferOut  tou WHERE tou.id=@TransferID', '@URL,']
+  TransferType: []
+  JSON types: []
+
+=== spSendWebRequestCLR.sql ===
+  Methods: []
+  URLs: []
+  TransferType: []
+  JSON types: []
+
+=== spTokenRequest.sql ===
+  Methods: ['POST']
+  URLs: ['tcpr.[url]', "@URL+'oauth/token'"]
+  TransferType: ["tt.id FROM tblTransferType tt WHERE tt.TransferType='Token'"]
+  JSON types: []
+  OPENJSON: access_token NVARCHAR(300...
+
+=== spTransportTracker.sql ===
+  Methods: []
+  URLs: []
+  TransferType: []
+  JSON types: []
+
+=== spUpdateCargoItem.sql ===
+  Methods: ['PATCH']
+  URLs: ["tcpr.[url]+'api/'+tcpr.[profile id]+'/shipments/'+@ShipmentID+'/cargos/'+@CargoID+'/items/'+@RowID FROM [dbo].[tblClientParams] tcpr WHERE tcpr.SiteCode=@SiteCode", "REPLACE(@URL,'#','%23')"]
+  TransferType: ["tt.id FROM tblTransferType tt WHERE tt.TransferType='Partner'"]
+  JSON types: []
+  OPENJSON: CargoItemID NVARCHAR(100...
+
+=== spUpdateCargoItemv223.sql ===
+  Methods: ['PATCH']
+  URLs: ["tcpr.[url]+'api/'+tcpr.[profile id]+'/cargo-operations/'+@ShipmentID+'/items/'+@RowID FROM [dbo].[tblClientParams] tcpr WHERE tcpr.SiteCode=@SiteCode", "REPLACE(@URL,'#','%23')"]
+  TransferType: ['6']
+  JSON types: []
+  OPENJSON: CargoItemID NVARCHAR(100...
+
+=== spUpdateCargov223.sql ===
+  Methods: ['PATCH']
+  URLs: ["tcpr.[url]+'api/'+tcpr.[profile id]+'/shipments/'+@ShipmentIDURL+'/cargos/'+@CargoIDURL FROM [dbo].[tblClientParams] tcpr WHERE tcpr.SiteCode=@SiteCode", "REPLACE(@URL,'#','%23')"]
+  TransferType: ['3']
+  JSON types: []
+  OPENJSON: CargoID NVARCHAR(100...
+
+=== spUpdateStationBookingv236.sql ===
+  Methods: ['PATCH']
+  URLs: ["tcpr.[url]+'api/'+tcpr.[profile id]+'/stations/'+@StationID FROM [dbo].[tblClientParams] tcpr WHERE tcpr.SiteCode=@SiteCode", "REPLACE(@URL,'#','%23')"]
+  TransferType: ['22']
+  JSON types: []
+
+=== spUpdateStationv223.sql ===
+  Methods: ['PATCH']
+  URLs: ["tcpr.[url]+'api/'+tcpr.[profile id]+'/stations/'+@StationID FROM [dbo].[tblClientParams] tcpr WHERE tcpr.SiteCode=@SiteCode", "REPLACE(@URL,'#','%23')"]
+  TransferType: ['22']
+  JSON types: []
+  OPENJSON: CargoID NVARCHAR(100...
+
+=== spUpdateStationv232.sql ===
+  Methods: ['POST']
+  URLs: ["tcpr.[url]+'api/'+tcpr.[profile id]+'/stations/'+@StationID+'/documentation-statuses' FROM [dbo].[tblClientParams] tcpr WHERE tcpr.SiteCode=@SiteCode", "REPLACE(@URL,'#','%23')"]
+  TransferType: ['22']
+  JSON types: []
+  OPENJSON: CargoID NVARCHAR(100...
+
+=== spUploadFileS4.sql ===
+  Methods: ['POST']
+  URLs: ["tcpr.[url]+'api/'+tcpr.[profile id]+'/shipments/cargos/'+@CargoID+'/documents/'+@DocumentType+'/upload' FROM [dbo].[tblClientParams] tcpr WHERE tcpr.SiteCode=@SiteCode", "REPLACE(@URL,'#','%23')"]
+  TransferType: ['16']
+  JSON types: []
+
+=== spUploadFile_depr.sql ===
+  Methods: ['POST']
+  URLs: ["tcpr.[url]+'api/'+tcpr.[profile id]+'/shipments/cargos/'+@CargoID+'/documents/'+@DocumentType+'/upload' FROM [dbo].[tblClientParams] tcpr WHERE tcpr.SiteCode=@SiteCode", "REPLACE(@URL,'#','%23')"]
+  TransferType: ['16']
+  JSON types: []
+

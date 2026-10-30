@@ -1448,18 +1448,18 @@ BEGIN
 				SELECT @CurrentDate = CONVERT(DATE, @SlotDate)
 				SET @CurrentTime=@StartTime
 			END
-			IF(CONVERT(TIME, @SlotDate)>= @EndTime)
+			ELSE IF(CONVERT(TIME, @SlotDate)>= @EndTime)
 			BEGIN
 				IF(@DayNum<5)
 				BEGIN
 					SELECT @CurrentDate = CONVERT(DATE, @SlotDate)
-					SET @CurrentDate=DATEADD(DAY,3, @CurrentDate)
+					SET @CurrentDate=DATEADD(DAY,1, @CurrentDate)
 					SET @CurrentTime=@StartTime
 				END
 				ELSE IF(@DayNum=5)
 				BEGIN
 					SELECT @CurrentDate = CONVERT(DATE, @SlotDate)
-					SET @CurrentDate=DATEADD(DAY,1, @CurrentDate)
+					SET @CurrentDate=DATEADD(DAY,3, @CurrentDate)
 					SET @CurrentTime=@StartTime
 				END
 			END
@@ -1526,7 +1526,7 @@ BEGIN
 
 		UPDATE @Stations
 		SET NewBookingSuccess=1, NewBookingSlot=@UpdBookingDate
-		WHERE StationID=@StationID
+		WHERE StationID=@UpdStationID
 	  END
 
 END

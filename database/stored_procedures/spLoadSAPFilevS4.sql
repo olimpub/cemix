@@ -397,7 +397,8 @@ BEGIN
 				   ,[StockQty]
 				   ,[NetWeight]
 				   ,[GrossWeight]
-				   ,[WeightUnit])
+				   ,[WeightUnit]
+				   ,[BatchFlg])
 		SELECT
 			@TransferID, --TransferID
 			@ID, --TransportNo
@@ -412,11 +413,12 @@ BEGIN
 			--s.n.value('(YE1EDL24_GLABS/LABST_VRKME)[1]' ,'VARCHAR(100)'),-- Interim FIX
 			s.n.value('(YE1EDL24_GLABS/LFIMG_PAL)[1]' ,'VARCHAR(100)'),  --PalletQty
 			s.n.value('(E1EDL26/PSTYV)[1]' ,'VARCHAR(100)'),  --TaxCode
-			ISNULL(s.n.value('(LICHN)[1]' ,'NVARCHAR(500)'),s.n.value('(CHARG)[1]' ,'NVARCHAR(500)')), --Comment	AS Batch Number, --Comment	
+			ISNULL(NULLIF(LTRIM(RTRIM(s.n.value('(LICHN)[1]' ,'NVARCHAR(500)'))),''),LTRIM(RTRIM(s.n.value('(CHARG)[1]' ,'NVARCHAR(500)')))), --Comment	AS Batch Number, --Comment	
 			s.n.value('(YE1EDL24_GLABS/LABST_VRKME)[1]' ,'VARCHAR(100)'),  --StockQty
-			s.n.value('(NTGEW)[1]' ,'VARCHAR(100)'),  --Net Weight
-			s.n.value('(BRGEW)[1]' ,'VARCHAR(100)'),  --Gross Weight
-			s.n.value('(GEWEI)[1]' ,'VARCHAR(100)')  --Net Weight
+			REPLACE(s.n.value('(NTGEW)[1]' ,'VARCHAR(100)'),',','.'),  --Net Weight
+			REPLACE(s.n.value('(BRGEW)[1]' ,'VARCHAR(100)'),',','.'),  --Gross Weight
+			s.n.value('(GEWEI)[1]' ,'VARCHAR(100)'),  --Net Weight
+			s.n.value('(HIEVW)[1]' ,'VARCHAR(10)') --BatchFlg
 		FROM @XML.nodes('/YYSHPMNT06_GLABS/IDOC/E1EDT20/E1EDL20') as b(n)
 		CROSS APPLY b.n.nodes('E1EDL24') AS s(n)
 		CROSS APPLY s.n.nodes('E1EDL41') AS z(n)
@@ -483,7 +485,7 @@ BEGIN
 			--s.n.value('(YE1EDL24_GLABS/LABST_VRKME)[1]' ,'VARCHAR(100)'),-- Interim FIX
 			s.n.value('(YE1EDL24_GLABS/LFIMG_PAL)[1]' ,'VARCHAR(100)'),  --PalletQty
 			s.n.value('(E1EDL26/PSTYV)[1]' ,'VARCHAR(100)'),  --TaxCode
-			ISNULL(s.n.value('(LICHN)[1]' ,'NVARCHAR(500)'),s.n.value('(CHARG)[1]' ,'NVARCHAR(500)')), --Comment	AS Batch Number
+			ISNULL(NULLIF(LTRIM(RTRIM(s.n.value('(LICHN)[1]' ,'NVARCHAR(500)'))),''),LTRIM(RTRIM(s.n.value('(CHARG)[1]' ,'NVARCHAR(500)')))), --Comment	AS Batch Number
 			s.n.value('(YE1EDL24_GLABS/LABST_VRKME)[1]' ,'VARCHAR(100)'),  --StockQty
 			REPLACE(s.n.value('(NTGEW)[1]' ,'VARCHAR(100)'),',','.'),  --Net Weight
 			REPLACE(s.n.value('(BRGEW)[1]' ,'VARCHAR(100)'),',','.'),  --Gross Weight
@@ -493,6 +495,21 @@ BEGIN
 		CROSS APPLY b.n.nodes('E1EDL24') AS s(n)
 		WHERE NOT EXISTS(SELECT * FROM @QS qs WHERE qs.DeliveryNo=b.n.value('(VBELN)[1]' ,'VARCHAR(100)') AND qs.Pos=s.n.value('(POSNR)[1]' ,'VARCHAR(100)'))
 	
+		-- Propagate BatchFlg = 'X' from header item (Qty = 0) or sibling sub-items before deleting Qty = 0 rows
+		UPDATE it
+		SET it.BatchFlg = 'X'
+		FROM [dbo].[tblTransferTransportDeliveryItem] it
+		WHERE it.TransferID = @TransferID
+		  AND ISNULL(it.BatchFlg, '') <> 'X'
+		  AND EXISTS (
+			SELECT 1
+			FROM [dbo].[tblTransferTransportDeliveryItem] it0
+			WHERE it0.TransferID = @TransferID
+			  AND it0.DeliveryNo = it.DeliveryNo
+			  AND it0.ItemCode = it.ItemCode
+			  AND (it0.BatchFlg = 'X' OR LTRIM(RTRIM(ISNULL(it0.Comment, ''))) <> '')
+		  )
+
 		--Delete where Qty = 0
 		DELETE it
 		FROM [dbo].[tblTransferTransportDeliveryItem] it
@@ -627,25 +644,20 @@ BEGIN
 			--Delivery Comment logic outbound logic
 			INSERT INTO @Comments(DeliveryNo,TDID,Comment)
 			SELECT 
-				s.n.value('(VBELN)[1]' ,'VARCHAR(100)'),  --DeliveryNo
-				z.n.value('(TDID)[1]' ,'VARCHAR(100)') , --DeliveryNo
-				ISNULL(y.n.value('(TDLINE)[1]' ,'VARCHAR(100)'),'') --COMMENT
-			from @XML.nodes('/YYSHPMNT06_GLABS/IDOC/E1EDT20/E1EDL20') as s(n)
-			CROSS APPLY s.n.nodes('E1TXTH8') as z(n)
-			OUTER APPLY z.n.nodes('E1TXTP8') as y(n)
-			WHERE s.n.value('(E1EDT13/QUALF)[1]' ,'VARCHAR(50)')='006'
-	 
-			 INSERT INTO @Comments2(DeliveryNo, Comment)
-			 SELECT c.DeliveryNo, ISNULL((SELECT  CAST((SELECT CAST(cc.Comment AS NVARCHAR(500))+' ' 
-					FROM @Comments cc
-					WHERE cc.DeliveryNo=c.DeliveryNo AND (TDID='Y002' OR TDID='0100')
-					FOR XML PATH('')) AS NVARCHAR(1000))),'') FROM @Comments c
-					GROUP BY c.DeliveryNo
+				s.n.value('(VBELN)[1]', 'VARCHAR(100)') AS DeliveryNo,
+				z.n.value('(TDID)[1]', 'VARCHAR(100)')  AS TDID,
+				LTRIM(RTRIM(z.n.query('
+					for $line in E1TXTP8/TDLINE/text()
+					return concat($line, " ")
+				').value('.', 'VARCHAR(MAX)'))) AS Comment
+			FROM @XML.nodes('/YYSHPMNT06_GLABS/IDOC/E1EDT20/E1EDL20') AS s(n)
+			CROSS APPLY s.n.nodes('E1TXTH8') AS z(n);
+
 		
 			--Update comment form multiple rows
 			UPDATE ttd
 			SET ttd.Comment=cc.Comment
-			FROM tblTransferTransportDelivery ttd INNER JOIN @Comments2 cc ON cc.DeliveryNo=ttd.DeliveryNo
+			FROM tblTransferTransportDelivery ttd INNER JOIN @Comments cc ON cc.DeliveryNo=ttd.DeliveryNo
 			
 			--HERE ADD Comment in case of inbound
 

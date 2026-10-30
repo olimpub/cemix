@@ -18,7 +18,7 @@ BEGIN
 
 BEGIN TRY
 
-	DECLARE @RowID INT, @ItemNo VARCHAR(10),@ItemCode VARCHAR(20),@ItemName NVARCHAR(300),@Qty NUMERIC(9,3),@RowComment NVARCHAR(1000),@Picking VARCHAR(10),@QtyUnit VARCHAR(50), @ItemSegment VARCHAR(20),@GLABsID VARCHAR(50), @CargoID VARCHAR(50), @PickingQty NUMERIC(9,3) ,@StockQty NUMERIC(9,3), @BatchFlg BIT,@LockedFlg BIT, @GrossWeight INT, @OriginalBatchNo VARCHAR(200), @NetWeight INT
+	DECLARE @RowID INT, @ItemNo VARCHAR(10),@ItemCode VARCHAR(20),@ItemName NVARCHAR(300),@Qty NUMERIC(9,3),@RowComment NVARCHAR(1000),@Picking VARCHAR(10),@QtyUnit VARCHAR(50), @ItemSegment VARCHAR(20),@GLABsID VARCHAR(50), @CargoID VARCHAR(50), @PickingQty NUMERIC(9,3) ,@StockQty NUMERIC(9,3), @BatchFlg BIT,@LockedFlg BIT, @GrossWeight INT, @OriginalBatchNo NVARCHAR(500), @NetWeight INT
 	SELECT  @ItemCode=ci.ItemCode,@ItemNo=ci.ItemNo, @ItemName = ci.ItemName, @Qty = ci.Qty, @RowComment =  ISNULL(ci.Comment,''), @Picking = 1/*ci.PickingFlg*/ ,@QtyUnit = ci.QtyUnitID, 
 	@GLABsID=CASE WHEN tc.SourceSiteCode=@SiteCode THEN ci.SourceGLABsID ELSE ci.DestinationGLABsID END, 
 	@CargoID=CASE WHEN tc.SourceSiteCode=@SiteCode THEN tc.SourceOperationsID ELSE tc.DestinationOperationsID END, 
@@ -72,7 +72,7 @@ BEGIN TRY
 	BEGIN
 		IF(@RowComment='')
 		BEGIN
-			SET @RowComment='Batch:-'
+			SET @RowComment='Batch:No Batch(' + FORMAT(@Qty, '0.###') + ')'
 		END
 		ELSE
 		BEGIN
@@ -94,7 +94,7 @@ BEGIN TRY
 
 	
 
-	IF(@BatchFlg=1 AND @OriginalBatchNo='')
+	IF(@BatchFlg=1 AND (@OriginalBatchNo='' OR @OriginalBatchNo='-' OR @OriginalBatchNo LIKE '%No Batch%'))
 	BEGIN
 			INSERT INTO JSONText
 			SELECT @TransferID,'data.attributes.pickingLocked','CAST(1 AS BIT)','' 

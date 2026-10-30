@@ -6,7 +6,7 @@ GO
 CREATE TABLE [dbo].[tblShipmentStat](
 	[id] [int] IDENTITY(1,1) NOT NULL,
 	[SiteCode] [varchar](20) NULL,
-	[StationID] [varchar](20) NULL,
+	[StationID] [varchar](50) NULL,
 	[ShipmentDate] [date] NULL,
 	[Latency] [smallint] NULL,
 	[PickingTime] [smallint] NULL,
@@ -23,4 +23,11 @@ PRIMARY KEY CLUSTERED
 	[id] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 ) ON [PRIMARY]
+GO
+
+CREATE NONCLUSTERED INDEX [IX_tblShipmentStat_StationID] ON [dbo].[tblShipmentStat]
+(
+	[StationID] ASC
+)
+INCLUDE([SiteCode], [ShipmentDate], [Latency], [WeightIn], [WeightOut], [ColliIn], [ColliOut], [PackagePrepared]) ON [PRIMARY]
 GO

@@ -27,11 +27,11 @@ FROM tblShipmentDocument sd
 WHERE sd.id=@DocumentID
 IF EXISTS(SELECT * FROM tblXrefDocumentType xd WHERE xd.GLABsID=@DocumentType AND ((xd.SAPID='DN') OR (xd.SAPID='DELIVERY_NOTE')))
 BEGIN
-	SET @DocumentName='DN_'+@TransportID+'_'+CAST(@DocumentID AS varchar(10))
+	SET @DocumentName='DN_'+@DeliveryNo+'_'+CAST(@DocumentID AS varchar(10))
 END
 ELSE
 BEGIN
-	SET @DocumentName='CMR_'+@DeliveryNo+'_'+CAST(@DocumentID AS varchar(10))
+	SET @DocumentName='CMR_'+@TransportID+'_'+CAST(@DocumentID AS varchar(10))
 END
 /*
 IF(ISNULL(@ExportType,'')='DLV')
